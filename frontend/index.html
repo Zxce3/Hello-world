@@ -16,12 +16,20 @@
       #greeting:empty {
         display: none;
       }
+      #posts {
+        margin: 20px auto;
+        padding: 10px 60px;
+        border: 1px solid #222;
+      }
+      #posts:empty {
+        display: none;
+      }
     </style>
     <script type="module">
       // Import the backend actor
       import { backend } from 'declarations/backend';
       // Add an event listener to the form
-      document.querySelector('form').addEventListener('submit', async (e) => {
+      document.querySelector('form#greetForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         // Get the name from the input field
         const name = document.getElementById('name').value.toString();
@@ -30,16 +38,52 @@
         // Display the greeting returned by the backend actor
         document.getElementById('greeting').innerText = greeting;
       });
+
+      // Add an event listener to the post form
+      document.querySelector('form#postForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        // Get the author and content from the input fields
+        const author = document.getElementById('author').value.toString();
+        const content = document.getElementById('content').value.toString();
+        // Calling the method "create_post" on the backend actor with the author and content
+        await backend.create_post(author, content);
+        // Retrieve and display the updated list of posts
+        displayPosts();
+      });
+
+      // Function to retrieve and display the list of posts
+      async function displayPosts() {
+        const posts = await backend.get_posts();
+        const postsSection = document.getElementById('posts');
+        postsSection.innerHTML = '';
+        posts.forEach(post => {
+          const postElement = document.createElement('div');
+          postElement.innerText = `${post.author}: ${post.content} (at ${new Date(post.timestamp * 1000).toLocaleString()})`;
+          postsSection.appendChild(postElement);
+        });
+      }
+
+      // Initial call to display posts
+      displayPosts();
     </script>
   </head>
   <body>
     <main>
-      <form>
+      <form id="greetForm">
         <label for="name">Enter your name: &nbsp;</label>
         <input id="name" alt="Name" type="text" />
         <button type="submit">Click Me!</button>
       </form>
       <section id="greeting"></section>
+
+      <form id="postForm">
+        <label for="author">Author: &nbsp;</label>
+        <input id="author" alt="Author" type="text" />
+        <label for="content">Content: &nbsp;</label>
+        <input id="content" alt="Content" type="text" />
+        <button type="submit">Create Post</button>
+      </form>
+      <section id="posts"></section>
     </main>
   </body>
 </html>

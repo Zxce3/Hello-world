@@ -1,10 +1,21 @@
 use ic_stable_structures::{
     memory_manager::{MemoryId, MemoryManager, VirtualMemory},
-    DefaultMemoryImpl,
+    DefaultMemoryImpl, Vec,
 };
 use std::cell::RefCell;
+use candid::{CandidType, Deserialize};
+use ic_cdk::export::Principal;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
+
+#[derive(CandidType, Deserialize, Clone)]
+struct Post {
+    id: u64,
+    author: Principal,
+    content: String,
+    timestamp: u64,
+}
 
 // To store global state in a Rust canister, we use the `thread_local!` macro.
 thread_local! {
@@ -18,6 +29,13 @@ thread_local! {
         ic_stable_structures::Cell::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(0))), "Hello, ".to_string()
         ).unwrap()
+    );
+
+    // We store the posts in a `Vec` in stable memory such that they get persisted over canister upgrades.
+    static POSTS: RefCell<Vec<Post, Memory>> = RefCell::new(
+        Vec::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(MemoryId::new(1)))
+        )
     );
 }
 
@@ -34,6 +52,27 @@ fn set_greeting(prefix: String) {
 fn greet(name: String) -> String {
     let greeting = GREETING.with_borrow(|greeting| greeting.get().clone());
     format!("{greeting}{name}!")
+}
+
+// This update method creates a new post and stores it in stable memory.
+#[ic_cdk::update]
+fn create_post(author: Principal, content: String) {
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let post = Post {
+        id: POSTS.with_borrow(|posts| posts.len() as u64),
+        author,
+        content,
+        timestamp,
+    };
+    POSTS.with_borrow_mut(|posts| {
+        posts.push(post).unwrap();
+    });
+}
+
+// This query method retrieves all posts from stable memory.
+#[ic_cdk::query]
+fn get_posts() -> Vec<Post> {
+    POSTS.with_borrow(|posts| posts.iter().cloned().collect())
 }
 
 // Export the interface for the smart contract.
